@@ -13,14 +13,20 @@ members = db['members']
 
 class Field(object):
 
-    def __init__(self, name, selector='', cleaner=lambda x: int(x.strip())):
+    def __init__(self, name, selector='', cleaner=None):
         self.name = name
         self.selector = selector
-        self.cleaner = cleaner
+
+        self.cleaner = Field.default_cleaner if cleaner is None else cleaner
 
     @staticmethod
     def default_cleaner(x):
-        return int(x.strip())
+        try:
+            v = int(x.strip())
+        except ValueError:
+            v = x.strip()
+
+        return v
 
     @staticmethod
     def fraction_cleaner(x):
@@ -64,8 +70,6 @@ class Parser(object):
             try:
                 cleaned = field.cleaner(raw[0])
                 data[field.name] = cleaned
-            except ValueError:
-                data[field.name] = raw[0].strip()
             except IndexError as e:
                 print("WARNING: Failed to retrieve Field [{}] ({})".format(field.name, e))
 
