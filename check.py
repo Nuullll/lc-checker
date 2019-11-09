@@ -4,6 +4,7 @@ from requests_html import HTMLSession
 from pymongo import MongoClient
 import datetime
 import pandas as pd
+import re
 
 client = MongoClient()
 db = client['leetcode_weekly']
@@ -12,10 +13,22 @@ members = db['members']
 
 class Field(object):
 
-    def __init__(self, name, selector='', cleaner=lambda x: x):
+    def __init__(self, name, selector='', cleaner=lambda x: int(x.strip())):
         self.name = name
         self.selector = selector
         self.cleaner = cleaner
+
+    @staticmethod
+    def default_cleaner(x):
+        return int(x.strip())
+
+    @staticmethod
+    def fraction_cleaner(x):
+        return [int(v.strip()) for v in x.split('/')]
+
+    @staticmethod
+    def percent_cleaner(x):
+        return float(x.split('%')[0].strip()) / 100
 
 
 class Parser(object):
@@ -30,7 +43,7 @@ class Parser(object):
         session = HTMLSession()
         r = session.get(url)
         if js_support:
-            r.html.render()
+            r.html.render(wait=5.0, timeout=15.0)
 
         ok = r.status_code == 200
         if ok:
@@ -51,9 +64,10 @@ class Parser(object):
             try:
                 cleaned = field.cleaner(raw[0])
                 data[field.name] = cleaned
-            except Exception as e:
+            except ValueError:
+                data[field.name] = raw[0].strip()
+            except IndexError as e:
                 print("WARNING: Failed to retrieve Field [{}] ({})".format(field.name, e))
-                pass
 
         return data
 
@@ -74,11 +88,11 @@ class Parser(object):
         members.update_one(
             filter={'Alias': alias},
             update={
-                '$push': {
-                    cls.server_name: {
-                        'Timestamp': cls.today,
-                        'Username': username,
-                        **data
+                '$set': {
+                    cls.server_name + "." + username: {
+                        cls.today: {
+                            **data
+                        },
                     }
                 }
             },
@@ -86,21 +100,49 @@ class Parser(object):
         )
 
 
-class LeetcodeParserEN(Parser):
-    server_name = 'leetcode-en'
+class LeetcodeParser(Parser):
+    server_name = 'leetcode'
     server_url = 'https://leetcode.com/'
 
     fields = [
         Field(
             'Solved Question',
             selector='//*[@id="base_content"]/div/div/div[1]/div[3]/ul/li[1]/span/text()',
-            cleaner=lambda x: x.split('/')[0].strip()
+            cleaner=Field.fraction_cleaner
         ),
+
+        Field(
+            'Finished Contests',
+            selector='//*[@id="base_content"]/div/div/div[1]/div[2]/ul/li[1]/span/text()',
+        ),
+
+        Field(
+            'Rating',
+            selector='//*[@id="base_content"]/div/div/div[1]/div[2]/ul/li[2]/span/text()',
+        ),
+
+        Field(
+            'Global Ranking',
+            selector='//*[@id="base_content"]/div/div/div[1]/div[2]/ul/li[3]/span/text()',
+            cleaner=Field.fraction_cleaner
+        ),
+
+        Field(
+            'Accepted Submission',
+            selector='//*[@id="base_content"]/div/div/div[1]/div[3]/ul/li[2]/span/text()',
+            cleaner=Field.fraction_cleaner
+        ),
+
+        Field(
+            'Acceptance Rate',
+            selector='//*[@id="base_content"]/div/div/div[1]/div[3]/ul/li[3]/span/text()',
+            cleaner=Field.percent_cleaner
+        )
     ]
 
 
-class LeetcodeParserZH(Parser):
-    server_name = 'leetcode-zh'
+class LeetcodeCNParser(Parser):
+    server_name = 'leetcode-cn'
     server_url = 'https://leetcode-cn.com/u/'
     js_support = True
 
@@ -108,24 +150,77 @@ class LeetcodeParserZH(Parser):
         Field(
             'Solved Question',
             selector='//*[@id="lc-content"]/div/div/div[2]/div[2]/div[2]/div[4]/div[2]/span/text()',
-            cleaner=lambda x: x.split('/')[0].strip()
+            cleaner=Field.fraction_cleaner
+        ),
+
+        Field(
+            'Finished Contests',
+            selector='//*[@id="lc-content"]/div/div/div[2]/div[2]/div[2]/div[3]/p/text()',
+            cleaner=lambda x: int(re.search(r'\d+', x)[0])
+        ),
+
+        Field(
+            'Global Ranking',
+            selector='//*[@id="lc-content"]/div/div/div[1]/div/div[1]/div/div[3]/span/text()'
+        ),
+
+        Field(
+            'Accepted Submission',
+            selector='//*[@id="lc-content"]/div/div/div[2]/div[2]/div[2]/div[4]/div[3]/span/text()',
+            cleaner=Field.fraction_cleaner
+        ),
+
+        Field(
+            'Acceptance Rate',
+            selector='//*[@id="lc-content"]/div/div/div[2]/div[2]/div[2]/div[4]/div[4]/span/text()',
+            cleaner=Field.percent_cleaner
+        )
+    ]
+
+
+class LuoguParser(Parser):
+    server_name = 'luogu'
+    server_url = 'https://www.luogu.org/user/'
+    js_support = True
+
+    fields = [
+        Field(
+            'Solved Question',
+            selector='//*[@id="app"]/div[2]/main/div/div[1]/div[2]/div[2]/div/div[4]/span[2]/text()',
+        ),
+
+        Field(
+            'Submission',
+            selector='//*[@id="app"]/div[2]/main/div/div[1]/div[2]/div[2]/div/div[3]/span[2]/text()'
+        ),
+
+        Field(
+            'Ranking',
+            selector='//*[@id="app"]/div[2]/main/div/div[1]/div[2]/div[2]/div/div[5]/span[2]/text()'
         )
     ]
 
 
 if __name__ == '__main__':
+    START, END = 0, -1
+
     parsers = {
-        '国服': LeetcodeParserZH,
-        '美服': LeetcodeParserEN
+        'leetcode-cn': LeetcodeCNParser,
+        'leetcode': LeetcodeParser,
+        'luogu': LuoguParser
     }
 
-    df = pd.read_csv('members.csv')
+    df = pd.read_csv('members.csv', keep_default_na=False)
     N = len(df)
 
-    for i, row in df.iterrows():
+    servers = df.columns[1:]
+    for i, row in df[START:END].iterrows():
         print("Processing {}/{}".format(i+1, N))
 
-        alias, username, server = row['群昵称'], row['Leetcode ID'], row['服务器']
+        for server in servers:
+            username = row[server]
+            if username == '':
+                continue
 
-        parser = parsers[server]
-        parser.process_user(alias, username)
+            parser = parsers[server]
+            parser.process_user(row['群昵称'], username)
