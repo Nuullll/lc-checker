@@ -206,7 +206,6 @@ class LuoguParser(Parser):
 
 
 if __name__ == '__main__':
-    START, END = 0, -1
 
     parsers = {
         'leetcode-cn': LeetcodeCNParser,
@@ -216,6 +215,7 @@ if __name__ == '__main__':
 
     df = pd.read_csv('members.csv', keep_default_na=False)
     N = len(df)
+    START, END = 24, N+1
 
     servers = df.columns[1:]
     for i, row in df[START:END].iterrows():
