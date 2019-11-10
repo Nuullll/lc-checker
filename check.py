@@ -5,10 +5,12 @@ from pymongo import MongoClient
 import datetime
 import pandas as pd
 import re
+import os
 
 client = MongoClient()
 db = client['leetcode_weekly']
 members = db['members']
+TODAY = str(datetime.date.today())
 
 
 class Field(object):
@@ -42,7 +44,6 @@ class Parser(object):
     server_url = ''
     fields = []
     js_support = False
-    today = str(datetime.date.today())
 
     @staticmethod
     def get_page(url, js_support=False):
@@ -83,6 +84,8 @@ class Parser(object):
         if ok:
             data = cls.parse_fields(context)
             print("[{}@{}]: {}".format(username, cls.server_name, data))
+            if data == {}:
+                raise FileNotFoundError("ID error or Network error. No data was retrieved.")
             cls.export_user(alias, username, data)
         else:
             print("WARNING: Failed to get profile of [{}]".format(username))
@@ -94,7 +97,7 @@ class Parser(object):
             update={
                 '$set': {
                     cls.server_name + "." + username: {
-                        cls.today: {
+                        TODAY: {
                             **data
                         },
                     }
@@ -205,26 +208,94 @@ class LuoguParser(Parser):
     ]
 
 
-if __name__ == '__main__':
-
+class Checker:
     parsers = {
-        'leetcode-cn': LeetcodeCNParser,
         'leetcode': LeetcodeParser,
+        'leetcode-cn': LeetcodeCNParser,
         'luogu': LuoguParser
     }
 
-    df = pd.read_csv('members.csv', keep_default_na=False)
-    N = len(df)
-    START, END = 24, N+1
+    tmp_dir = 'tmp'
 
-    servers = df.columns[1:]
-    for i, row in df[START:END].iterrows():
-        print("Processing {}/{}".format(i+1, N))
+    def __init__(self, members_csv, date=TODAY):
+        self.members = pd.read_csv(members_csv, keep_default_na=False)
+        self.checkpoint = '{}/{}.cp'.format(Checker.tmp_dir, date)
+        self.checked = set()
 
-        for server in servers:
-            username = row[server]
-            if username == '':
+    def run(self, force_update=False):
+        if force_update:
+            self._clean_tmp()
+        else:
+            if self._has_checkpoint():
+                self.checked = self._recover()
+
+        skip = 0
+        success = 0
+        fail = 0
+        fail_reason = []
+
+        total = len(self.members)
+        servers = self.members.columns[1:]
+
+        for i, row in self.members.iterrows():
+            print("Processing {}/{}".format(i + 1, total))
+            alias = row['群昵称']
+            if alias in self.checked:
+                skip += 1
+                print("Skipped.")
                 continue
 
-            parser = parsers[server]
-            parser.process_user(row['群昵称'], username)
+            ok = True
+            for server in servers:
+                username = row[server]
+                if username == '':
+                    continue
+
+                total += 1
+                parser = self.parsers[server]
+
+                try:
+                    parser.process_user(alias, username)
+                except Exception as e:
+                    print("WARNING: Network timeout. Skipped to the next entry. ({})".format(e))
+                    ok = False
+                    fail_reason.append("[{}: {}@{}] {}".format(alias, username, server, e))
+
+            if ok:
+                success += 1
+                self._save_checkpoint(alias)
+            else:
+                fail += 1
+
+        print("SUMMARY:")
+        print("Total = {}, Skip = {}, Success = {}, Fail = {}".format(total, skip, success, fail))
+        for reason in fail_reason:
+            print("\t" + reason)
+
+    def _has_checkpoint(self):
+        os.makedirs(Checker.tmp_dir, exist_ok=True)
+
+        if os.path.isfile(self.checkpoint):
+            return True
+
+        self._clean_tmp()
+        return False
+
+    def _save_checkpoint(self, alias):
+        self.checked.add(alias)
+        with open(self.checkpoint, 'a') as f:
+            f.write(alias + '\n')
+
+    @staticmethod
+    def _clean_tmp():
+        for root, _, files in os.walk(Checker.tmp_dir):
+            for file in files:
+                os.remove(os.path.join(root, file))
+
+    def _recover(self):
+        with open(self.checkpoint) as f:
+            return {line.strip() for line in f.readlines()}
+
+
+if __name__ == '__main__':
+    Checker('members.csv').run(force_update=False)
