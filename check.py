@@ -272,6 +272,8 @@ class Checker:
         for reason in fail_reason:
             print("\t" + reason)
 
+        return total, skip, success, fail
+
     def _has_checkpoint(self):
         os.makedirs(Checker.tmp_dir, exist_ok=True)
 
@@ -298,4 +300,11 @@ class Checker:
 
 
 if __name__ == '__main__':
-    Checker('members.csv').run(force_update=False)
+    retry = 6
+
+    worker = Checker('members.csv')
+    for i in range(retry):
+        total, skip, success, fail = worker.run(force_update=False)
+        if total == skip + success:
+            print("Job finished. Retry = {}".format(i))
+            break
