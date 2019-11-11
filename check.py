@@ -251,7 +251,6 @@ class Checker:
                 if username == '':
                     continue
 
-                total += 1
                 parser = self.parsers[server]
 
                 try:
