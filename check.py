@@ -96,10 +96,8 @@ class Parser(object):
             filter={'Alias': alias},
             update={
                 '$set': {
-                    cls.server_name + "." + username: {
-                        TODAY: {
-                            **data
-                        },
+                    cls.server_name + "." + username + "." + TODAY: {
+                        **data
                     }
                 }
             },
