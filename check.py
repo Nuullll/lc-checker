@@ -220,7 +220,18 @@ class Checker:
         self.checkpoint = '{}/{}.cp'.format(Checker.tmp_dir, date)
         self.checked = set()
 
-    def run(self, force_update=False):
+    def run_with_retry(self, retry=6):
+        force_update = True
+        for i in range(retry):
+            total, skip, success, fail = self.run_once(force_update)
+            force_update = False
+            if total == skip + success:
+                print("Job finished. Retry = {}".format(i))
+                return True
+
+        return False
+
+    def run_once(self, force_update=False):
         if force_update:
             self._clean_tmp()
         else:
@@ -297,11 +308,5 @@ class Checker:
 
 
 if __name__ == '__main__':
-    retry = 6
-
     worker = Checker('members.csv')
-    for i in range(retry):
-        total, skip, success, fail = worker.run(force_update=False)
-        if total == skip + success:
-            print("Job finished. Retry = {}".format(i))
-            break
+    worker.run_with_retry(6)
