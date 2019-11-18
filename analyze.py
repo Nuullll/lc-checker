@@ -5,6 +5,7 @@ import datetime
 import pandas as pd
 import numpy as np
 from operator import itemgetter
+import matplotlib.pyplot as plt
 
 client = MongoClient()
 db = client['leetcode_weekly']
@@ -27,8 +28,10 @@ class Analyzer:
 
     @staticmethod
     def _clean(documents):
-        query_times = np.arange(np.datetime64(TODAY) - np.timedelta64(7, 'D'),
+        query_times = np.arange(np.datetime64(TODAY) - np.timedelta64(1, 'D'),
                                 np.datetime64(TODAY) + np.timedelta64(1, 'D'))
+
+        print("Time range: {}".format(query_times))
 
         cleaned = {}
         for doc in documents:
@@ -97,4 +100,4 @@ if __name__ == '__main__':
 
     for i, item in enumerate(rank):
         name, c = item
-        print("#{} | {} | {}".format(i, name, int(c)))
+        print("|\t#{}\t|{:<15}\t|\t{}\t|".format(i, name, int(c)))
