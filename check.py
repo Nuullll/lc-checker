@@ -6,6 +6,7 @@ import datetime
 import pandas as pd
 import re
 import os
+import json
 
 client = MongoClient()
 db = client['leetcode_weekly']
@@ -15,11 +16,12 @@ TODAY = str(datetime.date.today())
 
 class Field(object):
 
-    def __init__(self, name, selector='', cleaner=None):
+    def __init__(self, name, selector='', cleaner=None, json_parser=None):
         self.name = name
         self.selector = selector
 
         self.cleaner = Field.default_cleaner if cleaner is None else cleaner
+        self.json_parser = json_parser
 
     @staticmethod
     def default_cleaner(x):
@@ -60,19 +62,28 @@ class Parser(object):
 
     @classmethod
     def get_user_url(cls, username):
-        return cls.server_url + username
+        return cls.server_url.format(username)
 
     @classmethod
     def parse_fields(cls, context):
         data = {}
         for field in cls.fields:
-            raw = context.xpath(field.selector)
+            if field.json_parser is None:
+                raw = context.xpath(field.selector)
 
-            try:
-                cleaned = field.cleaner(raw[0])
-                data[field.name] = cleaned
-            except IndexError as e:
-                print("WARNING: Failed to retrieve Field [{}] ({})".format(field.name, e))
+                try:
+                    cleaned = field.cleaner(raw[0])
+                    data[field.name] = cleaned
+                except IndexError as e:
+                    print("WARNING: Failed to retrieve Field [{}] ({})".format(field.name, e))
+            else:
+                obj = json.loads(context.text)
+
+                try:
+                    cleaned = field.json_parser(obj)
+                    data[field.name] = cleaned
+                except KeyError as e:
+                    print("WARNING: Failed to retrieve Field [{}] ({})".format(field.name, e))
 
         return data
 
@@ -107,7 +118,7 @@ class Parser(object):
 
 class LeetcodeParser(Parser):
     server_name = 'leetcode'
-    server_url = 'https://leetcode.com/'
+    server_url = 'https://leetcode.com/{}'
 
     fields = [
         Field(
@@ -148,7 +159,7 @@ class LeetcodeParser(Parser):
 
 class LeetcodeCNParser(Parser):
     server_name = 'leetcode-cn'
-    server_url = 'https://leetcode-cn.com/u/'
+    server_url = 'https://leetcode-cn.com/u/{}'
     js_support = True
 
     fields = [
@@ -185,7 +196,7 @@ class LeetcodeCNParser(Parser):
 
 class LuoguParser(Parser):
     server_name = 'luogu'
-    server_url = 'https://www.luogu.org/user/'
+    server_url = 'https://www.luogu.org/user/{}'
     js_support = True
 
     fields = [
@@ -206,11 +217,31 @@ class LuoguParser(Parser):
     ]
 
 
+class LintcodeParser(Parser):
+    server_name = 'lintcode'
+    server_url = 'https://www.lintcode.com/api/accounts/{}/profile/?format=json'
+
+    fields = [
+        Field(
+            'Solved Question',
+            json_parser=lambda x: [x['user_summary']['problem']['total_accepted'],
+                                   x['user_summary']['problem']['total']]
+        ),
+
+        Field(
+            'AI Problem Submitted',
+            json_parser=lambda x: [x['user_summary']['ai']['total_submitted'],
+                                   x['user_summary']['ai']['total']]
+        )
+    ]
+
+
 class Checker:
     parsers = {
         'leetcode': LeetcodeParser,
         'leetcode-cn': LeetcodeCNParser,
-        'luogu': LuoguParser
+        'luogu': LuoguParser,
+        'lintcode': LintcodeParser
     }
 
     tmp_dir = 'tmp'
@@ -308,4 +339,4 @@ class Checker:
 
 if __name__ == '__main__':
     worker = Checker('members.csv')
-    worker.run_with_retry(6, True)
+    worker.run_with_retry(6, False)
