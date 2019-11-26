@@ -339,4 +339,4 @@ class Checker:
 
 if __name__ == '__main__':
     worker = Checker('members.csv')
-    worker.run_with_retry(6, False)
+    worker.run_with_retry(6, True)

@@ -18,7 +18,8 @@ class Analyzer:
     servers = [
         'leetcode',
         'leetcode-cn',
-        'luogu'
+        'luogu',
+        'lintcode'
     ]
 
     def __init__(self):
@@ -83,10 +84,10 @@ class Analyzer:
 
         cols = data.columns
         for col in cols:
-            x = data[col].min()
-            y = data[col].max()
+            x = data[col].dropna().diff()
+            count = x[x >= 0].sum()
 
-            rank.append((col, y-x))
+            rank.append((col, count))
 
         rank.sort(reverse=True, key=itemgetter(1))
 
