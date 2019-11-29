@@ -29,7 +29,7 @@ class Analyzer:
 
     @staticmethod
     def _clean(documents):
-        query_times = np.arange(np.datetime64(TODAY) - np.timedelta64(1, 'D'),
+        query_times = np.arange(np.datetime64(TODAY) - np.timedelta64(4, 'D'),
                                 np.datetime64(TODAY) + np.timedelta64(1, 'D'))
 
         print("Time range: {}".format(query_times))
@@ -98,6 +98,7 @@ if __name__ == '__main__':
     worker = Analyzer()
 
     rank = worker.delta()
+    print('Platforms: {}'.format(worker.servers))
 
     for i, item in enumerate(rank):
         name, c = item
