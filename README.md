@@ -16,5 +16,4 @@
 
 ## Usage
 
-1. Start your local mongod server.
-2. `python check.py`
+*The project is under refactoring. Usage not applicable.*
