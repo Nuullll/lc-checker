@@ -7,13 +7,9 @@
 # @Email: vfirst218@gmail.com
 
 from requests_html import HTMLSession
-from pymongo import MongoClient
 from checker.util import today
 import json
 
-client = MongoClient()
-db = client['leetcode_weekly']
-members = db['members']
 TODAY = today()
 
 
@@ -26,6 +22,7 @@ class Spider(object):
     server_url = ''
     fields = []
     js_support = False
+    collection = None
 
     @staticmethod
     def get_page(url, js_support=False):
@@ -69,7 +66,7 @@ class Spider(object):
         return data
 
     @classmethod
-    def process_user(cls, alias, username):
+    def process_user(cls, username):
         url = cls.get_user_url(username)
 
         ok, context = cls.get_page(url, cls.js_support)
@@ -79,20 +76,9 @@ class Spider(object):
             print("[{}@{}]: {}".format(username, cls.server_name, data))
             if data == {}:
                 raise FileNotFoundError("ID error or Network error. No data was retrieved.")
-            cls.export_user(alias, username, data)
+
+            return data
         else:
             print("WARNING: Failed to get profile of [{}]".format(username))
 
-    @classmethod
-    def export_user(cls, alias, username, data):
-        members.update_one(
-            filter={'Alias': alias},
-            update={
-                '$set': {
-                    cls.server_name + "." + username + "." + TODAY: {
-                        **data
-                    }
-                }
-            },
-            upsert=True
-        )
+        return {}

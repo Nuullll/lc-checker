@@ -5,7 +5,7 @@ import datetime
 import pandas as pd
 import numpy as np
 from operator import itemgetter
-import matplotlib.pyplot as plt
+from checker.util import print_width
 
 client = MongoClient()
 db = client['leetcode_weekly']
@@ -19,7 +19,9 @@ class Analyzer:
         'leetcode',
         'leetcode-cn',
         'luogu',
-        'lintcode'
+        'lintcode',
+        'hdu',
+        'vjudge'
     ]
 
     def __init__(self):
@@ -29,7 +31,7 @@ class Analyzer:
 
     @staticmethod
     def _clean(documents):
-        query_times = np.arange(np.datetime64(TODAY) - np.timedelta64(4, 'D'),
+        query_times = np.arange(np.datetime64(TODAY) - np.timedelta64(2, 'D'),
                                 np.datetime64(TODAY) + np.timedelta64(1, 'D'))
 
         print("Time range: {}".format(query_times))
@@ -100,6 +102,12 @@ if __name__ == '__main__':
     rank = worker.delta()
     print('Platforms: {}'.format(worker.servers))
 
+    max_width = 0
+    for name, _ in rank:
+        max_width = max(max_width, print_width(name))
+
     for i, item in enumerate(rank):
         name, c = item
-        print("|\t#{}\t|{:<15}\t|\t{}\t|".format(i, name, int(c)))
+        width = print_width(name)
+        name = name + ' ' * (max_width - width + 1)
+        print("| #{:<3}\t| {}\t| {:<4}\t|".format(i, name, int(c)))

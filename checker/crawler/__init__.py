@@ -1,19 +1,27 @@
 
 from checker import settings
 from checker.util import today
+from pymongo import MongoClient
 import importlib
 import os
 import pandas as pd
 
+client = MongoClient()
+db = client['oj_data']
+
 
 class Runner(object):
 
-    def __init__(self):
-        self._get_settings()
+    def __init__(self, group='Leetcode Weekly'):
+        self._get_settings(group=group)
 
+        self.group = group
         self.members = None
         self.checked = set()
         self.date = today()
+        self.checkpoint = os.path.join(self.tmp_dir, '{}-{}.cp'.format(group, self.date))
+
+        self.collection = db[group]
 
     def run_with_retry(self, retry=6, force_update=True):
         for i in range(retry):
@@ -57,7 +65,10 @@ class Runner(object):
                 spider = self.spiders[server]
 
                 try:
-                    spider.process_user(alias, username)
+                    data = spider.process_user(username)
+                    if data:
+                        self.export_item(alias, username, spider.server_name, data)
+
                 except Exception as e:
                     print("WARNING: Network timeout. Skipped to the next entry. ({})".format(e))
                     ok = False
@@ -76,7 +87,20 @@ class Runner(object):
 
         return total, skip, success, fail
 
-    def _get_settings(self):
+    def export_item(self, alias, username, server_name, data):
+        self.collection.update_one(
+            filter={'Alias': alias},
+            update={
+                '$set': {
+                    server_name + "." + username + "." + self.date: {
+                        **data
+                    }
+                }
+            },
+            upsert=True
+        )
+
+    def _get_settings(self, group):
 
         # platforms
         self.spiders = {}
@@ -97,7 +121,7 @@ class Runner(object):
         os.makedirs(self.data_dir, exist_ok=True)
 
         # members csv
-        self.members_file = os.path.join(self.data_dir, settings.MEMBERS_FILE)
+        self.members_file = os.path.join(self.data_dir, settings.MEMBERS_FILE[group])
         if not os.path.isfile(self.members_file):
             raise FileNotFoundError('Members file not found: {}'.format(self.members_file))
 
@@ -113,13 +137,12 @@ class Runner(object):
     def _clean_tmp(self):
         for root, _, files in os.walk(self.tmp_dir):
             for file in files:
-                os.remove(os.path.join(root, file))
+                if file.startswith(self.group):
+                    os.remove(os.path.join(root, file))
 
     def _recover_from_checkpoint(self):
-        checkpoint = os.path.join(self.tmp_dir, '{}.cp'.format(self.date))
-
-        if os.path.isfile(checkpoint):
-            with open(checkpoint) as f:
+        if os.path.isfile(self.checkpoint):
+            with open(self.checkpoint) as f:
                 self.checked = {line.strip() for line in f.readlines()}
         else:
             self.checked = set()
@@ -129,8 +152,6 @@ class Runner(object):
         self.members = pd.read_csv(self.members_file, keep_default_na=False)
 
     def _save_checkpoint(self, alias):
-        checkpoint = os.path.join(self.tmp_dir, '{}.cp'.format(self.date))
-
         self.checked.add(alias)
-        with open(checkpoint, 'a') as f:
+        with open(self.checkpoint, 'a') as f:
             f.write(alias + '\n')

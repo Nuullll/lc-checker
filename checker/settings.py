@@ -12,5 +12,8 @@ TMP_DIR = 'tmp'
 
 DATA_DIR = 'data'
 
-MEMBERS_FILE = 'members.csv'
+MEMBERS_FILE = {
+    'Leetcode Weekly': 'weekly.csv',
+    'Leetcode 200': 'lc200.csv'
+}
 
