@@ -1,5 +1,7 @@
 # Weekly leetcode progress checker
 
+This repo was archived and moved to [Nuullll/nullbot](https://github.com/Nuullll/nullbot).
+
 ## Requirements
 
 * python 3.6
